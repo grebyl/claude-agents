@@ -9,7 +9,7 @@
 >
 > **Model recommendation:**
 > - Opus: Solutions Architect, Statistics Reviewer, Consolidator, Skill Maintainer, Paper Drafter
-> - Sonnet: All others (Code Writer, Tester, Documentation, Git, etc.)
+> - Sonnet: All others (Code Writer, QA Agent, Tester, Documentation, Git, etc.)
 
 ---
 
@@ -41,13 +41,14 @@ Agent Sequence:
   3. Code Writer             → implements src/
   4. Statistics Reviewer      → validates methodology (research only)
   5. Consolidator            → reviews structure, refactors
-  6. Tester                  → writes and runs tests
-  7. Documentation Agent     → docstrings, README, API docs
-  8. Bibliography Agent      → citations (research only)
-  9. Dependency Auditor      → pyproject.toml hygiene
- 10. Git Agent               → commits, CHANGELOG
- 11. Publication Output Agent → figures + tables (research only)
- 12. Scope Creep Agent       → validates scope
+  6. QA Agent                → implementation quality audit
+  7. Tester                  → writes and runs tests
+  8. Documentation Agent     → docstrings, README, API docs
+  9. Bibliography Agent      → citations (research only)
+ 10. Dependency Auditor      → pyproject.toml hygiene
+ 11. Git Agent               → commits, CHANGELOG
+ 12. Publication Output Agent → figures + tables (research only)
+ 13. Scope Creep Agent       → validates scope
 ```
 
 ### Mode 2: Review
@@ -61,10 +62,11 @@ Agent Sequence:
   2. Data Quality Agent      → audits data handling (research only)
   3. Statistics Reviewer      → reviews methodology AND questions all formulas
   4. Tester                  → evaluates coverage, runs tests
-  5. Documentation Agent     → audits docs AND generates missing ones
-  6. Bibliography Agent      → audits citations (research only)
-  7. Dependency Auditor      → full audit
-  8. Scope Creep Agent       → compares code to stated purpose
+  5. QA Agent                → implementation quality audit
+  6. Documentation Agent     → audits docs AND generates missing ones
+  7. Bibliography Agent      → audits citations (research only)
+  8. Dependency Auditor      → full audit
+  9. Scope Creep Agent       → compares code to stated purpose
 
 Output: docs/review_report.md
 ```
@@ -82,11 +84,12 @@ Agent Sequence:
   ── PAUSE ──               → you approve proposed changes before continuing
   3. Code Writer             → migrates code per approved design
   4. Consolidator            → reviews migrated structure
-  5. Tester                  → runs tests, fixes broken imports
-  6. Documentation Agent     → updates README, CLAUDE.md, and all docs with new paths
-  7. Dependency Auditor      → cleans up dependencies
-  8. Git Agent               → commits with conventional messages
-  9. Scope Creep Agent       → verifies no functionality lost
+  5. QA Agent                → audits migrated code quality
+  6. Tester                  → runs tests, fixes broken imports
+  7. Documentation Agent     → updates README, CLAUDE.md, and all docs with new paths
+  8. Dependency Auditor      → cleans up dependencies
+  9. Git Agent               → commits with conventional messages
+ 10. Scope Creep Agent       → verifies no functionality lost
 
 Rules: Never change business logic. Branch first. Tests must pass.
        If formula or logic concerns are found during migration, log them in
@@ -354,7 +357,83 @@ Append to `docs/consolidation_log.md`. Log every structural change with justific
 
 ---
 
-## Agent 6: Tester
+## Agent 6: QA Agent
+
+**Model:** Sonnet
+**Modes:** All three
+
+### Mindset
+
+You are a code quality auditor doing a line-by-line implementation review.
+The Consolidator already verified structure. The Statistics Reviewer already verified
+formulas. Your job is everything in between: dead code, resource safety, type completeness,
+defensive guards, and cross-module consistency.
+
+### Checklist (run every item on every file in `src/`)
+
+**Dead Code:**
+- [ ] No unused imports (ruff catches most, but check re-exports)
+- [ ] No unused instance variables (`self.x = []` never read)
+- [ ] No dead properties (always return constant or placeholder)
+- [ ] No unreachable branches
+- [ ] No initialized-but-never-used collections
+
+**Type Annotations:**
+- [ ] All public functions have return type annotations
+- [ ] All private methods have return type annotations
+- [ ] All `__init__` parameters are typed
+- [ ] No bare `dict`, `list`, `tuple` — use parameterized generics
+
+**Resource Safety:**
+- [ ] File handles use `with` or try/finally
+- [ ] Database connections use context managers
+- [ ] External library handles (fitz, sqlite3) have guaranteed cleanup
+- [ ] No resource acquisition outside of guarded blocks
+
+**Defensive Guards:**
+- [ ] Functions that iterate inputs guard against empty collections
+- [ ] Validation happens before data is used, not after
+- [ ] Grid/layout assumptions are dynamic, not hardcoded
+- [ ] Division operations guard against zero denominators
+
+**Cross-Module Consistency:**
+- [ ] No duplicate enum/class definitions across modules
+- [ ] No duplicate constant definitions (same value in two places)
+- [ ] No duplicate config sections (pyproject.toml, etc.)
+- [ ] Shared types are imported from a single canonical source
+
+**String Literals:**
+- [ ] Docstrings reference current file paths and CLI commands
+- [ ] Error messages reference current module/function names
+- [ ] Comments don't reference old/pre-migration structure
+
+**Implementation Correctness:**
+- [ ] No hardcoded values that should be computed from data
+- [ ] No `import` statements inside functions (unless lazy-loading for startup perf)
+- [ ] add_point/update patterns handle both insert and update correctly
+- [ ] Mutable default arguments use `field(default_factory=...)` or `None`
+
+### Output
+
+Append findings to `docs/review_report.md` under a `## QA Agent Findings` section,
+categorized by severity (Critical / High / Medium / Low) with file:line references.
+
+### Restructure Mode
+
+Run full checklist on all migrated files. Pay special attention to:
+- Stale string literals that reference pre-migration paths
+- Imports that were duplicated rather than consolidated during migration
+- Resource handles that lost their safety wrappers during file moves
+
+### Handoff Checklist
+- [ ] Every file in `src/` reviewed against checklist
+- [ ] Findings logged in `docs/review_report.md`
+- [ ] Critical and high issues fixed before handoff
+- [ ] `ruff check` and `ruff format` pass after fixes
+
+---
+
+## Agent 7: Tester
 
 **Model:** Sonnet
 **Modes:** All three
@@ -381,7 +460,7 @@ Fix broken imports after migration. If tests don't exist, write them.
 
 ---
 
-## Agent 7: Documentation Agent
+## Agent 8: Documentation Agent
 
 **Model:** Sonnet
 **Modes:** All three
@@ -420,7 +499,7 @@ Update all documentation to reflect structural changes:
 
 ---
 
-## Agent 8: Bibliography Agent
+## Agent 9: Bibliography Agent
 
 **Model:** Sonnet
 **Modes:** Greenfield, Review
@@ -442,7 +521,7 @@ Skills: Use `research-bibliography` for citation templates and common citations.
 
 ---
 
-## Agent 9: Dependency Auditor
+## Agent 10: Dependency Auditor
 
 **Model:** Sonnet
 **Modes:** All three
@@ -464,7 +543,7 @@ Skills: Use `research-bibliography` for citation templates and common citations.
 
 ---
 
-## Agent 10: Git Agent
+## Agent 11: Git Agent
 
 **Model:** Sonnet
 **Modes:** Greenfield, Restructure
@@ -488,7 +567,7 @@ Skills: Use `research-bibliography` for citation templates and common citations.
 
 ---
 
-## Agent 11: Publication Output Agent
+## Agent 12: Publication Output Agent
 
 **Model:** Sonnet
 **Modes:** Greenfield only
@@ -511,7 +590,7 @@ Skills: Use `publication-output` for figures + tables. Use `quant-performance-re
 
 ---
 
-## Agent 12: Scope Creep Agent
+## Agent 13: Scope Creep Agent
 
 **Model:** Sonnet
 **Modes:** All three
@@ -540,7 +619,7 @@ Verify no functionality was lost during migration.
 
 ---
 
-## Agent 13: Skill Maintainer
+## Agent 14: Skill Maintainer
 
 **Model:** Opus
 **Mode:** Independent — not part of build pipeline
@@ -567,7 +646,7 @@ claude "Run Skill Maintainer. I learned [description]. Update [skill]."
 
 ---
 
-## Agent 14: Paper Drafter
+## Agent 15: Paper Drafter
 
 **Model:** Opus
 **Mode:** Independent — run when results are final (research only)
@@ -665,6 +744,7 @@ When running in review mode, consolidate all findings into `docs/review_report.m
 - [ ] Data quality report complete (research)
 - [ ] `src/data_contracts.py` matches datasets (research)
 - [ ] Statistics review passed (research)
+- [ ] QA Agent findings resolved (critical/high)
 - [ ] `ruff check` and `ruff format` pass
 - [ ] Tests pass with ≥80% coverage
 - [ ] Reproducibility tests pass
