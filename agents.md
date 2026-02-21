@@ -83,7 +83,7 @@ Agent Sequence:
   3. Code Writer             → migrates code per approved design
   4. Consolidator            → reviews migrated structure
   5. Tester                  → runs tests, fixes broken imports
-  6. Documentation Agent     → updates docs, generates missing ones
+  6. Documentation Agent     → updates README, CLAUDE.md, and all docs with new paths
   7. Dependency Auditor      → cleans up dependencies
   8. Git Agent               → commits with conventional messages
   9. Scope Creep Agent       → verifies no functionality lost
@@ -400,11 +400,23 @@ Audit AND generate:
 - Updated `README.md` if stale
 - Docstring coverage report
 
+### Restructure Mode
+
+Update all documentation to reflect structural changes:
+- **`README.md`**: Update project structure tree, CLI commands, import examples,
+  file path references, and any code snippets that reference moved modules
+- **`CLAUDE.md`**: Update build commands, project structure, import examples,
+  testing commands, and architecture diagrams
+- **`docs/review_report.md`**: Log deferred items discovered during migration
+- Verify no stale file paths remain in any documentation
+
 ### Handoff Checklist
 - [ ] All public functions have NumPy docstrings
-- [ ] `README.md` current
+- [ ] `README.md` current — project structure, commands, and paths match actual layout
+- [ ] `CLAUDE.md` current — all examples use new import paths
 - [ ] `docs/api.md` generated
 - [ ] Missing docs generated (review mode)
+- [ ] No stale file paths in any documentation (restructure mode)
 
 ---
 
