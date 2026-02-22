@@ -124,8 +124,9 @@ Skills: Use `python-scaffold` for project setup templates.
 1. Walk the entire file tree
 2. Read every module — extract purpose, public interface, dependencies
 3. Build file manifest retroactively
-4. Map data flow between modules
+4. Map data flow between modules — verify every loaded dataset reaches its consumer
 5. Identify structural problems (multiple responsibilities, circular imports, dead code)
+6. Flag data flow gaps: data loaded by I/O layer but never plumbed to consumers
 
 In restructure mode, produce Current vs. Proposed structure:
 
@@ -166,6 +167,8 @@ In restructure mode, produce Current vs. Proposed structure:
 - [ ] Requirements restated and confirmed
 - [ ] Every file justified
 - [ ] Interfaces and data flow defined
+- [ ] Data flow verified end-to-end: every loaded dataset reaches its consumer
+- [ ] Reference data strategy documented (inline code vs external JSON/YAML/DB)
 - [ ] `.gitignore`, `pyproject.toml`, `README.md`, `CHANGELOG.md` created (greenfield)
 - [ ] Initial ADR written
 - [ ] `src/` does NOT exist yet (greenfield — Code Writer creates it)
@@ -204,6 +207,12 @@ Skills: Use `quant-data-quality` for financial data auditing patterns.
 - Data freshness — most recent observation within expected range
 - Schema matches expectations (required columns present, correct dtypes)
 
+**Cross-dataset alignment (every pair of related datasets):**
+- Date ranges overlap sufficiently (>80% of business days in common)
+- No silent fallback when one dataset's dates don't match another's
+- Missing data produces explicit warnings, not silent degradation
+- Frequency alignment verified (daily vs weekly vs monthly)
+
 **Financial-specific checks:**
 - **Survivorship bias:** Is the universe point-in-time or current constituents only? Flag if current-only.
 - **Price adjustments:** Split-adjusted? Dividend-adjusted? Is that appropriate for the signal?
@@ -221,8 +230,8 @@ Skills: Use `quant-data-quality` for financial data auditing patterns.
 - **Weekend/holiday data:** Flag observations dated on weekends or major market holidays
 - **Cross-sectional consistency:** If panel data, verify same dates across all securities (balanced vs unbalanced panel)
 
-> **Note:** Once the `quant-data-quality` skill is populated, these checks will be
-> maintained there. Until then, this section is the authoritative checklist.
+> **Note:** The `quant-data-quality` skill contains implementation patterns (code examples,
+> anti-patterns, severity guides) that complement this checklist. Both are authoritative.
 
 ### Handoff Checklist
 - [ ] All datasets identified and documented
@@ -230,6 +239,8 @@ Skills: Use `quant-data-quality` for financial data auditing patterns.
 - [ ] Data licenses confirmed for publication
 - [ ] Acquisition list prioritized (blocking vs non-blocking)
 - [ ] `src/data_contracts.py` created
+- [ ] Cross-dataset date alignment verified
+- [ ] No silent fallbacks when data is missing — all fallbacks logged or warned
 - [ ] Critical blocking items flagged
 
 ---
@@ -343,6 +354,11 @@ For each file in `src/`, ask:
 3. Are there circular imports?
 4. Is there dead code?
 5. Could two files be merged without loss of clarity?
+6. Are there 3+ identical code blocks that should be a shared helper (DRY)?
+
+For each package `__init__.py`, ask:
+7. Does it export all types that appear in public function signatures?
+8. Can a library consumer `from package import TypeName` for every type they'd need?
 
 ### Output
 
@@ -352,6 +368,8 @@ Append to `docs/consolidation_log.md`. Log every structural change with justific
 - [ ] Every module has single responsibility
 - [ ] No circular imports
 - [ ] Dead code removed
+- [ ] No 3+ identical code blocks (extract shared helper)
+- [ ] All `__init__.py` files export all public types used in function signatures
 - [ ] `docs/consolidation_log.md` updated
 - [ ] `docs/design.md` File Manifest updated
 
@@ -395,6 +413,7 @@ defensive guards, and cross-module consistency.
 - [ ] Validation happens before data is used, not after
 - [ ] Grid/layout assumptions are dynamic, not hardcoded
 - [ ] Division operations guard against zero denominators
+- [ ] No silent fallbacks — missing/mismatched data must `warnings.warn()` or raise, never silently degrade (e.g., falling back to equal weights without warning)
 
 **Cross-Module Consistency:**
 - [ ] No duplicate enum/class definitions across modules
@@ -406,6 +425,17 @@ defensive guards, and cross-module consistency.
 - [ ] Docstrings reference current file paths and CLI commands
 - [ ] Error messages reference current module/function names
 - [ ] Comments don't reference old/pre-migration structure
+
+**System Boundary Validation:**
+- [ ] CLI arguments validated before use (types, ranges, enum membership)
+- [ ] Database connection strings validated for format before passing to drivers
+- [ ] File paths validated for existence before opening
+- [ ] External inputs (user data, API responses) validated at entry point
+
+**Dispatch Completeness:**
+- [ ] Functions that accept union types handle every variant (e.g., `save_output` handles `Result | list[Result] | dict[str, Result]`)
+- [ ] All code paths through CLI produce output compatible with the output handler
+- [ ] Type signatures match all actual callers — trace each caller's return type to the consumer
 
 **Implementation Correctness:**
 - [ ] No hardcoded values that should be computed from data
@@ -447,6 +477,14 @@ Run full checklist on all migrated files. Pay special attention to:
 
 Skills: Run `research-reproducibility` verification scripts as part of test suite.
 
+### CLI Integration Tests
+
+If the project has a CLI entry point, test every code path end-to-end:
+- Every mutually exclusive mode (e.g., single run, comparison, Monte Carlo)
+- Every output format (CSV, Excel, stdout) for each mode
+- Error handling paths (invalid args, missing data, bad connection strings)
+- Verify output handler accepts every mode's return type
+
 ### Restructure Mode
 
 Fix broken imports after migration. If tests don't exist, write them.
@@ -454,6 +492,7 @@ Fix broken imports after migration. If tests don't exist, write them.
 ### Handoff Checklist
 - [ ] All public functions tested
 - [ ] Edge cases covered
+- [ ] CLI integration tests cover all code paths and output formats
 - [ ] ≥80% coverage
 - [ ] `pytest` passes
 - [ ] Reproducibility scripts pass
@@ -739,14 +778,18 @@ When running in review mode, consolidate all findings into `docs/review_report.m
 - [ ] `.gitignore` present and complete
 - [ ] `pyproject.toml` is single source of truth for dependencies
 - [ ] `docs/design.md` File Manifest matches actual `src/`
+- [ ] Data flow verified end-to-end (Architect)
+- [ ] All `__init__.py` export all public types (Consolidator)
 - [ ] Consolidation Log documents structural changes
 - [ ] ADR folder documents key decisions
 - [ ] Data quality report complete (research)
+- [ ] Cross-dataset alignment verified (research)
 - [ ] `src/data_contracts.py` matches datasets (research)
 - [ ] Statistics review passed (research)
 - [ ] QA Agent findings resolved (critical/high)
 - [ ] `ruff check` and `ruff format` pass
 - [ ] Tests pass with ≥80% coverage
+- [ ] CLI integration tests cover all code paths (Tester)
 - [ ] Reproducibility tests pass
 - [ ] All public functions have NumPy docstrings
 - [ ] `docs/bibliography.md` complete (research)
